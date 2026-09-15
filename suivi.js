@@ -50,16 +50,33 @@ var SITE_PULLUP = "animationcommerciale974";
       if (!a) return;
       var h = (a.getAttribute('href') || '').toLowerCase();
       if (h.indexOf('tel:') === 0) {
-        gtag('event', 'clic_telephone', { site_pullup: SITE_PULLUP });
+        if (e.__puAppel) return;
+        e.__puAppel = true;
+        gtag('event', 'click_tel', { site_pullup: SITE_PULLUP, site: SITE_PULLUP, page: location.pathname });
       } else if (h.indexOf('wa.me') > -1 || h.indexOf('whatsapp') > -1) {
-        gtag('event', 'clic_whatsapp', { site_pullup: SITE_PULLUP });
+        gtag('event', 'click_whatsapp', { site_pullup: SITE_PULLUP, page: location.pathname });
       } else if (h.indexOf('mailto:') === 0) {
-        gtag('event', 'clic_email', { site_pullup: SITE_PULLUP });
+        gtag('event', 'click_mail', { site_pullup: SITE_PULLUP, page: location.pathname });
       }
     });
 
-    document.addEventListener('submit', function () {
-      gtag('event', 'demande_devis', { site_pullup: SITE_PULLUP });
+    document.addEventListener('submit', function (ev) {
+      window.__puDevisEnvoye = true;
+      var prestation = '';
+      try {
+        var el = ev.target && ev.target.querySelector ? ev.target.querySelector('[name="type"],[name="prestation"],[name="formule"],[name="Prestation"]') : null;
+        if (el) prestation = el.value;
+      } catch (err) {}
+      var connu = '';
+      try { var c = ev.target.querySelector('[name="Comment nous avez-vous connus"]'); if (c) connu = c.value; } catch (err2) {}
+      gtag('event', 'form_submit', {
+        site_pullup: SITE_PULLUP,
+        site: SITE_PULLUP,
+        form_id: (ev.target && ev.target.id) || 'formulaire',
+        prestation: prestation,
+        source_declaree: connu,
+        source_page: location.pathname
+      });
     });
   }
 
@@ -78,7 +95,8 @@ var SITE_PULLUP = "animationcommerciale974";
       '#pu-cookies button{cursor:pointer;border:0;border-radius:9px;padding:10px 16px;' +
       'font:600 14px system-ui,-apple-system,Segoe UI,sans-serif;flex:1 1 auto}' +
       '#pu-ck-oui{background:#f5c04e;color:#14141d}' +
-      '#pu-ck-non{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.45)}';
+      '#pu-ck-non{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.45)}' +
+      '@media(max-width:760px){#pu-cookies{bottom:78px}}';
     document.head.appendChild(st);
 
     var b = document.createElement('div');
@@ -109,4 +127,44 @@ var SITE_PULLUP = "animationcommerciale974";
     if (document.body) bandeau();
     else document.addEventListener('DOMContentLoaded', bandeau);
   }
+})();
+
+/* ── Provenance des demandes (session 40) : remplit des champs cachés dans chaque formulaire.
+   Ce ne sont pas des cookies de suivi : ces valeurs partent avec la demande de devis, rien d'autre. ── */
+(function () {
+  function utm() {
+    try {
+      var p = new URLSearchParams(location.search), out = [];
+      ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'gclid', 'fbclid'].forEach(function (k) {
+        if (p.get(k)) out.push(k + '=' + p.get(k));
+      });
+      return out.join(' ');
+    } catch (e) { return ''; }
+  }
+  function premier(cle, val) {              /* garde la première valeur de la visite */
+    try {
+      var v = sessionStorage.getItem(cle);
+      if (v) return v;
+      if (val) sessionStorage.setItem(cle, val);
+      return val || '';
+    } catch (e) { return val || ''; }
+  }
+  var ref = premier('pu_ref', document.referrer && document.referrer.indexOf(location.host) < 0 ? document.referrer : '');
+  var camp = premier('pu_utm', utm());
+  var entree = premier('pu_entree', location.pathname);
+  function poser(form) {
+    var champs = {
+      "Page d'origine": location.href.split('#')[0],
+      "Page d'entrée sur le site": entree,
+      "Site précédent": ref || 'accès direct ou inconnu',
+      "Campagne UTM": camp || 'aucune'
+    };
+    Object.keys(champs).forEach(function (n) {
+      var i = form.querySelector('input[name="' + n + '"]');
+      if (!i) { i = document.createElement('input'); i.type = 'hidden'; i.name = n; form.appendChild(i); }
+      i.value = champs[n];
+    });
+  }
+  function tous() { var fs = document.querySelectorAll('form'); for (var i = 0; i < fs.length; i++) poser(fs[i]); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', tous); else tous();
 })();
